@@ -22,7 +22,7 @@ A catalog of ~2,500 isolated bright stars suitable for telescope focusing, gener
 | `bright_star_catalog.txt` | Catalog in TheSkyX fixed-width text format |
 | `bright_star_catalog.SDBX` | Pre-built TheSkyX user catalog database |
 | `bright_star_catalog.png` | Mollweide all-sky plot of catalog stars |
-| `AtFocus2.dbq` | AtFocus2 database file |
+| `AtFocus2.dbq` | Updated database query file used by @Focus2 to select focus stars |
 
 ## Regenerating the catalog
 
