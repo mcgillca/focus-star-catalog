@@ -58,6 +58,21 @@ Stars will then appear in TheSkyX with an `AF2` prefix. When searching, include 
 | HIP 36046 | `AF2 HIP 36046` |
 | Gaia source 3314024566919613952 | `AF2 GAI 3314024566919613952` |
 
+## Customising the catalog
+
+The key parameters are on lines 47–52 of `make_bright_star_catalog.py`:
+
+```python
+OUTPUT_FILE = "bright_star_catalog.txt"
+MAG_DOWNLOAD = 8.5    # download limit (2 mag deeper for proximity checks)
+MAG_UPPER    = 6.5    # output upper limit
+MAG_LOWER    = 3.5    # output lower limit
+FIELD_DEG    = 2.0    # field-isolation radius (degrees)
+BOX_ARCMIN   = 5.0    # focus-box isolation radius (arcmin)
+```
+
+After adjusting these and running the script, a new `bright_star_catalog.txt` will be produced. To use it in TheSkyX you will need to reimport the text file to generate a new `.SDBX` database file, then copy that into the `SDBs` folder as described above.
+
 ## Filter logic
 
 The script applies filters in a specific order to ensure bright stars outside the final magnitude range still act as contaminants:
