@@ -51,7 +51,12 @@ This will query the Gaia DR3 archive (~30–60 seconds for the async job), apply
    ~/Library/Application Support/Software Bisque/TheSkyX Professional Edition/SDBs/
    ```
 
-Stars will then appear as searchable objects in TheSkyX with their HIP or Gaia designations.
+Stars will then appear in TheSkyX with an `AF2` prefix. When searching, include the prefix — for example:
+
+| Star | Search for |
+|------|-----------|
+| HIP 36046 | `AF2 HIP 36046` |
+| Gaia source 3314024566919613952 | `AF2 GAI 3314024566919613952` |
 
 ## Filter logic
 
