@@ -36,9 +36,22 @@ This will query the Gaia DR3 archive (~30–60 seconds for the async job), apply
 
 ## Importing into TheSkyX
 
-1. In TheSkyX, open **Data > User Defined Catalogs**
-2. Add `bright_star_catalog.SDBX`, or import `bright_star_catalog.txt` directly
-3. Stars will appear as searchable objects with their HIP or Gaia designations
+1. **Back up the original database query file** before making any changes:
+   ```
+   ~/Library/Application Support/Software Bisque/TheSkyX Professional Edition/Database Queries/AtFocus2.dbq
+   ```
+
+2. Copy `AtFocus2.dbq` to:
+   ```
+   ~/Library/Application Support/Software Bisque/TheSkyX Professional Edition/Database Queries/
+   ```
+
+3. Copy `bright_star_catalog.SDBX` to:
+   ```
+   ~/Library/Application Support/Software Bisque/TheSkyX Professional Edition/SDBs/
+   ```
+
+Stars will then appear as searchable objects in TheSkyX with their HIP or Gaia designations.
 
 ## Filter logic
 
