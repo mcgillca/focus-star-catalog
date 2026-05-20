@@ -191,18 +191,36 @@ def plot_sky(table, ra, dec, path: str = "bright_star_catalog.png"):
     plt.show()
 
 
+def to_hms(ra_deg):
+    total_s = ra_deg * 3600.0 / 15.0
+    h = int(total_s // 3600)
+    total_s -= h * 3600
+    m = int(total_s // 60)
+    s = total_s - m * 60
+    return h, m, s
+
+
+def to_dms(dec_deg):
+    sign = "+" if dec_deg >= 0 else "-"
+    total_s = abs(dec_deg) * 3600.0
+    d = int(total_s // 3600)
+    total_s -= d * 3600
+    m = int(total_s // 60)
+    s = total_s - m * 60
+    return sign, d, m, s
+
+
 def write_catalog(table, ra, dec, hip_map: dict, path: str):
-    W_RA   = 12
-    W_DEC  = 12
-    W_MAG  =  7
+    W_RAH, W_RAM, W_RAS = 4, 4, 7
+    W_SGN, W_DED, W_DEM, W_DES = 2, 4, 4, 6
+    W_MAG  = 7
     W_TYPE = 10
     W_NAME = 16
 
     header = " ".join([
-        f"{'RA':>{W_RA}}",
-        f"{'Dec':>{W_DEC}}",
-        f"{'Mag':>{W_MAG}}",
-        f"{'ObjType':>{W_TYPE}}",
+        f"{'RAh':>{W_RAH}}", f"{'RAm':>{W_RAM}}", f"{'RAs':>{W_RAS}}",
+        f"{'Sgn':>{W_SGN}}", f"{'DEd':>{W_DED}}", f"{'DEm':>{W_DEM}}",
+        f"{'DEs':>{W_DES}}", f"{'Mag':>{W_MAG}}", f"{'ObjType':>{W_TYPE}}",
         f"{'Label/Search':>{W_NAME}}",
     ])
     separator = "-" * len(header)
@@ -212,14 +230,15 @@ def write_catalog(table, ra, dec, hip_map: dict, path: str):
         fh.write(header + "\n")
         fh.write(separator + "\n")
         for i, row in enumerate(table):
+            h, m, s       = to_hms(ra[i])
+            sg, d, dm, ds = to_dms(dec[i])
             mag  = float(row["phot_g_mean_mag"])
             name = format_name(int(row["source_id"]), hip_map)
             line = " ".join([
-                f"{ra[i]:>{W_RA}.6f}",
-                f"{dec[i]:>{W_DEC}.6f}",
-                f"{mag:>{W_MAG}.3f}",
-                f"{'Star':>{W_TYPE}}",
-                f"{name:>{W_NAME}}",
+                f"{h:>{W_RAH}d}", f"{m:>{W_RAM}d}", f"{s:>{W_RAS}.3f}",
+                f"{sg:>{W_SGN}}", f"{d:>{W_DED}d}", f"{dm:>{W_DEM}d}",
+                f"{ds:>{W_DES}.2f}", f"{mag:>{W_MAG}.3f}",
+                f"{'Star':>{W_TYPE}}", f"{name:>{W_NAME}}",
             ])
             fh.write(line + "\n")
 

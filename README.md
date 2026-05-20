@@ -14,7 +14,7 @@ Optimised for the Takahashi FSQ-85ED with a Player One Zeus (IMX455) camera, whi
 - **Focus-box isolation**: no other Gaia source (to G < 9.5, ~16× fainter than the brightest focus star) within 5 arcmin — clean PSF for HFD/centroid algorithms
 - **Non-variable**: Gaia `phot_variable_flag != VARIABLE`
 - **Stellar sources only**: `classprob_dsc_combmod_star > 0.5` (or NULL for bright stars not assessed by the pipeline)
-- **Coordinates**: decimal degrees, ICRS J2000.0, propagated from Gaia DR3 J2016.0 using per-star proper motions
+- **Coordinates**: sexagesimal (H M S / sign D M S), ICRS J2000.0, propagated from Gaia DR3 J2016.0 using per-star proper motions
 - **Names**: HIP numbers where available (Hipparcos cross-match), Gaia source_id otherwise
 
 ## Files
@@ -22,7 +22,7 @@ Optimised for the Takahashi FSQ-85ED with a Player One Zeus (IMX455) camera, whi
 | File | Description |
 |------|-------------|
 | `make_bright_star_catalog.py` | Script to regenerate the catalog from Gaia DR3 |
-| `bright_star_catalog.txt` | Catalog in TheSkyX fixed-width text format (decimal RA/Dec, J2000.0) |
+| `bright_star_catalog.txt` | Catalog in TheSkyX fixed-width text format (sexagesimal RA/Dec, J2000.0) |
 | `bright_star_catalog.SDBX` | Pre-built TheSkyX user catalog database |
 | `bright_star_catalog.png` | Mollweide all-sky plot of catalog stars |
 | `AtFocus2.dbq` | Updated database query file used by @Focus2 to select focus stars |
