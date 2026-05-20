@@ -1,17 +1,20 @@
 # Focus Star Catalog
 
-A catalog of ~2,500 isolated bright stars suitable for telescope focusing, generated from Gaia DR3. Designed for use with TheSkyX as a user-added catalog.
+A catalog of ~793 isolated bright stars suitable for telescope focusing, generated from Gaia DR3. Designed for use with TheSkyX as a user-added catalog.
+
+Optimised for the Takahashi FSQ-85ED with a Player One Zeus (IMX455) camera, which gives a 4.58° × 3.05° field of view (5.5° diagonal). The 3° field isolation radius guarantees no brighter star appears anywhere in the field, including the corners.
 
 ![Sky distribution of focus stars](bright_star_catalog.png)
 
 ## Catalog properties
 
+- **Stars**: ~793 all-sky
 - **Magnitude range**: 3.5 ≤ G ≤ 6.5
-- **Field isolation**: brightest star within 2° — no brighter star will accidentally be selected instead
-- **Focus-box isolation**: no other Gaia source (to G < 8.5) within 5 arcmin — clean PSF for HFD/centroid algorithms
+- **Field isolation**: no brighter Gaia source within 3° — covers the full FOV diagonal of the FSQ-85/Zeus combination
+- **Focus-box isolation**: no other Gaia source (to G < 9.5, ~16× fainter than the brightest focus star) within 5 arcmin — clean PSF for HFD/centroid algorithms
 - **Non-variable**: Gaia `phot_variable_flag != VARIABLE`
 - **Stellar sources only**: `classprob_dsc_combmod_star > 0.5` (or NULL for bright stars not assessed by the pipeline)
-- **Coordinates**: ICRS J2000.0, propagated from Gaia DR3 J2016.0 using per-star proper motions
+- **Coordinates**: decimal degrees, ICRS J2000.0, propagated from Gaia DR3 J2016.0 using per-star proper motions
 - **Names**: HIP numbers where available (Hipparcos cross-match), Gaia source_id otherwise
 
 ## Files
@@ -19,7 +22,7 @@ A catalog of ~2,500 isolated bright stars suitable for telescope focusing, gener
 | File | Description |
 |------|-------------|
 | `make_bright_star_catalog.py` | Script to regenerate the catalog from Gaia DR3 |
-| `bright_star_catalog.txt` | Catalog in TheSkyX fixed-width text format |
+| `bright_star_catalog.txt` | Catalog in TheSkyX fixed-width text format (decimal RA/Dec, J2000.0) |
 | `bright_star_catalog.SDBX` | Pre-built TheSkyX user catalog database |
 | `bright_star_catalog.png` | Mollweide all-sky plot of catalog stars |
 | `AtFocus2.dbq` | Updated database query file used by @Focus2 to select focus stars |
@@ -51,6 +54,8 @@ This will query the Gaia DR3 archive (~30–60 seconds for the async job), apply
    ~/Library/Application Support/Software Bisque/TheSkyX Professional Edition/SDBs/
    ```
 
+If you have regenerated the catalog from the script, import `bright_star_catalog.txt` into TheSkyX to produce a new `.SDBX` file, then copy that into the `SDBs` folder.
+
 Stars will then appear in TheSkyX with an `AF2` prefix. When searching, include the prefix — for example:
 
 | Star | Search for |
@@ -60,25 +65,26 @@ Stars will then appear in TheSkyX with an `AF2` prefix. When searching, include 
 
 ## Customising the catalog
 
-The key parameters are on lines 47–52 of `make_bright_star_catalog.py`:
+The key parameters are on lines 48–52 of `make_bright_star_catalog.py`:
 
 ```python
-OUTPUT_FILE = "bright_star_catalog.txt"
-MAG_DOWNLOAD = 8.5    # download limit (2 mag deeper for proximity checks)
+MAG_DOWNLOAD = 9.5    # download limit (3 mag deeper, ~16x fainter than brightest focus star)
 MAG_UPPER    = 6.5    # output upper limit
 MAG_LOWER    = 3.5    # output lower limit
-FIELD_DEG    = 2.0    # field-isolation radius (degrees)
+FIELD_DEG    = 3.0    # field-isolation radius (degrees) — covers FSQ-85/Zeus FOV corners
 BOX_ARCMIN   = 5.0    # focus-box isolation radius (arcmin)
 ```
 
-After adjusting these and running the script, a new `bright_star_catalog.txt` will be produced. To use it in TheSkyX you will need to reimport the text file to generate a new `.SDBX` database file, then copy that into the `SDBs` folder as described above.
+After adjusting these and running the script, a new `bright_star_catalog.txt` will be produced. Import it into TheSkyX to generate a new `.SDBX` database file, then copy that into the `SDBs` folder as described above.
 
 ## Filter logic
 
-The script applies filters in a specific order to ensure bright stars outside the final magnitude range still act as contaminants:
+The script applies filters in a specific order to ensure sources outside the final magnitude range still act as contaminants during proximity checks:
 
-1. Download all Gaia sources with G < 8.5 (no type filtering at this stage)
-2. Remove any source that has a brighter source within 2° (field isolation)
-3. Remove any surviving candidate that has any other source within 5 arcmin (focus-box isolation, checked against the full G < 8.5 download)
-4. Keep only stellar, non-variable sources with 3.5 ≤ G ≤ 6.5
-5. Propagate positions from Gaia J2016.0 to J2000.0 using proper motions
+1. Download all Gaia sources with G < 9.5 (no type or variability filtering at this stage)
+2. Propagate all positions from Gaia J2016.0 to today using per-star proper motions
+3. Remove any source with a brighter source within 3° (field isolation, using today's positions)
+4. Remove any surviving candidate with any other source within 5 arcmin (focus-box isolation, checked against the full G < 9.5 download)
+5. Keep only stellar, non-variable sources with 3.5 ≤ G ≤ 6.5
+6. Fetch Hipparcos cross-matches for the final stars
+7. Propagate output positions from Gaia J2016.0 to J2000.0 for the catalog
