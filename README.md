@@ -2,7 +2,7 @@
 
 A catalog of ~793 isolated bright stars suitable for telescope focusing, generated from Gaia DR3. Designed for use with TheSkyX as a user-added catalog.
 
-Optimised for the Takahashi FSQ-85ED with a Player One Zeus (IMX455) camera, which gives a 4.58° × 3.05° field of view (5.5° diagonal). The 3° field isolation radius guarantees no brighter star appears anywhere in the field, including the corners.
+Suitable for any imaging setup with a field of view up to 6° across. The 3° field isolation radius guarantees no brighter star appears anywhere in the field, including the corners.
 
 ![Sky distribution of focus stars](bright_star_catalog.png)
 
@@ -10,7 +10,7 @@ Optimised for the Takahashi FSQ-85ED with a Player One Zeus (IMX455) camera, whi
 
 - **Stars**: ~793 all-sky
 - **Magnitude range**: 3.5 ≤ G ≤ 6.5
-- **Field isolation**: no brighter Gaia source within 3° — covers the full FOV diagonal of the FSQ-85/Zeus combination
+- **Field isolation**: no brighter Gaia source within 3° — covers the full diagonal of any FOV up to 6° across
 - **Focus-box isolation**: no other Gaia source (to G < 9.5, ~16× fainter than the brightest focus star) within 5 arcmin — clean PSF for HFD/centroid algorithms
 - **Non-variable**: Gaia `phot_variable_flag != VARIABLE`
 - **Stellar sources only**: `classprob_dsc_combmod_star > 0.5` (or NULL for bright stars not assessed by the pipeline)
