@@ -11,16 +11,17 @@
 
 """
 Downloads Gaia DR3 sources with G < 9.5 and produces a fixed-width text catalog
-in TheSkyX user catalog format (decimal RA/Dec, current epoch).
+in TheSkyX user catalog format (sexagesimal RA/Dec, CATALOG_EPOCH).
 
 Filter logic (order matters):
   1. Download ALL Gaia sources with G < 9.5 (no type or variability filter —
      all sources act as contaminants in the proximity checks)
-  2. Propagate all positions from Gaia J2016.0 to today using proper motions
+  2. Propagate all positions from Gaia J2016.0 to CATALOG_EPOCH using proper motions
   3. Remove any source that has a brighter source within 3° (field isolation)
   4. Remove any surviving candidate that has ANY other source from the full
      G < 9.5 catalog within 5 arcmin (focus-box isolation)
   5. Final filter: stellar, non-variable, 3.5 <= G <= 6.5
+  6. Output positions are at CATALOG_EPOCH; TheSkyX handles precession internally
 """
 
 import ssl
@@ -52,8 +53,8 @@ MAG_LOWER    = 3.5    # output lower limit
 FIELD_DEG    = 3.0    # field-isolation radius (degrees) — covers FSQ-85/Zeus FOV corners
 BOX_ARCMIN   = 5.0    # focus-box isolation radius (arcmin)
 
-T_GAIA = Time("J2016.0")   # Gaia DR3 reference epoch
-T_NOW  = Time.now()        # propagate to today before filtering and output
+T_GAIA         = Time("J2016.0")   # Gaia DR3 reference epoch
+CATALOG_EPOCH  = Time("J2030.0")   # target epoch for filtering and output
 
 
 def query_gaia(mag_limit: float) -> "astropy.table.Table":
@@ -178,9 +179,8 @@ def plot_sky(table, ra, dec, path: str = "bright_star_catalog.png"):
                       pad=0.05, fraction=0.03)
     cb.set_label("Gaia G magnitude")
 
-    epoch_str = T_NOW.strftime("%Y-%m-%d")
     ax.set_title(f"Focus star catalog  ({len(table):,} stars,  "
-                 f"{MAG_LOWER} ≤ G ≤ {MAG_UPPER},  {epoch_str})", pad=16)
+                 f"{MAG_LOWER} ≤ G ≤ {MAG_UPPER},  {CATALOG_EPOCH.value})", pad=16)
     ax.grid(True, alpha=0.3)
     ax.set_xticklabels(["22h", "20h", "18h", "16h", "14h",
                         "12h", "10h",  "8h",  "6h",  "4h",  "2h"])
@@ -249,14 +249,14 @@ def main():
     # Step 1 — download all sources to MAG_DOWNLOAD
     all_sources = query_gaia(MAG_DOWNLOAD)
 
-    # Step 2 — propagate ALL positions from J2016.0 to today
-    print(f"Propagating positions from J2016.0 to {T_NOW.strftime('%Y-%m-%d')} ...")
+    # Step 2 — propagate ALL positions from J2016.0 to CATALOG_EPOCH
+    print(f"Propagating positions from J2016.0 to {CATALOG_EPOCH.value} ...")
     all_ra, all_dec = propagate(
         np.array(all_sources["ra"],    dtype=float),
         np.array(all_sources["dec"],   dtype=float),
         np.array(all_sources["pmra"],  dtype=float),
         np.array(all_sources["pmdec"], dtype=float),
-        T_GAIA, T_NOW,
+        T_GAIA, CATALOG_EPOCH,
     )
     all_mags = np.array(all_sources["phot_g_mean_mag"], dtype=float)
     all_ids  = np.array(all_sources["source_id"])
@@ -294,18 +294,8 @@ def main():
     # Step 6 — fetch HIP IDs for the final stars only (small targeted query)
     hip_map = query_hip_ids(np.array(candidates["source_id"]))
 
-    # Step 7 — propagate output positions from J2016.0 to J2000.0
-    # (filters used T_NOW positions; catalog must be J2000 for TheSkyX)
-    print("Propagating output positions from J2016.0 to J2000.0 ...")
-    out_ra, out_dec = propagate(
-        np.array(candidates["ra"],    dtype=float),
-        np.array(candidates["dec"],   dtype=float),
-        np.array(candidates["pmra"],  dtype=float),
-        np.array(candidates["pmdec"], dtype=float),
-        T_GAIA, Time("J2000.0"),
-    )
-
-    write_catalog(candidates, out_ra, out_dec, hip_map, OUTPUT_FILE)
+    # Step 7 — output uses the already-propagated CATALOG_EPOCH positions
+    write_catalog(candidates, cand_ra, cand_dec, hip_map, OUTPUT_FILE)
     plot_sky(candidates, cand_ra, cand_dec)
 
 
