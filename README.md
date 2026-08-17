@@ -1,6 +1,6 @@
 # Focus Star Catalog
 
-A catalog of ~793 isolated bright stars suitable for telescope focusing, generated from Gaia DR3. Designed for use with TheSkyX as a user-added catalog.
+A catalog of ~792 isolated bright stars suitable for telescope focusing, generated from Gaia DR3. Designed for use with TheSkyX as a user-added catalog.
 
 Suitable for any imaging setup with a field of view up to 6° across. The 3° field isolation radius guarantees no brighter star appears anywhere in the field, including the corners.
 
@@ -8,7 +8,7 @@ Suitable for any imaging setup with a field of view up to 6° across. The 3° fi
 
 ## Catalog properties
 
-- **Stars**: ~793 all-sky
+- **Stars**: ~792 all-sky
 - **Magnitude range**: 3.5 ≤ G ≤ 6.5
 - **Field isolation**: no brighter Gaia source within 3° — covers the full diagonal of any FOV up to 6° across
 - **Focus-box isolation**: no other Gaia source (to G < 9.5, ~16× fainter than the brightest focus star) within 5 arcmin — clean PSF for HFD/centroid algorithms
