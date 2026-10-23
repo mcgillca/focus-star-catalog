@@ -1,6 +1,6 @@
 # Focus Star Catalog
 
-A catalog of ~792 isolated bright stars suitable for telescope focusing, generated from Gaia DR3. Designed for use with TheSkyX as a user-added catalog.
+A catalog of 791 isolated bright stars suitable for telescope focusing, generated from Gaia DR3. Designed for use with TheSkyX as a user-added catalog.
 
 Suitable for any imaging setup with a field of view up to 6° across. The 3° field isolation radius guarantees no brighter star appears anywhere in the field, including the corners.
 
@@ -8,21 +8,21 @@ Suitable for any imaging setup with a field of view up to 6° across. The 3° fi
 
 ## Catalog properties
 
-- **Stars**: ~792 all-sky
+- **Stars**: 791 all-sky
 - **Magnitude range**: 3.5 ≤ G ≤ 6.5
 - **Field isolation**: no brighter Gaia source within 3° — covers the full diagonal of any FOV up to 6° across
 - **Focus-box isolation**: no other Gaia source (to G < 9.5, ~16× fainter than the brightest focus star) within 5 arcmin — clean PSF for HFD/centroid algorithms
 - **Non-variable**: Gaia `phot_variable_flag != VARIABLE`
 - **Stellar sources only**: `classprob_dsc_combmod_star > 0.5` (or NULL for bright stars not assessed by the pipeline)
-- **Coordinates**: sexagesimal (H M S / sign D M S), ICRS J2030.0, propagated from Gaia DR3 J2016.0 using per-star proper motions. TheSkyX handles precession internally.
-- **Names**: HIP numbers where available (Hipparcos cross-match), Gaia source_id otherwise
+- **Coordinates**: sexagesimal (H M S / sign D M S), ICRS J2000.0. Positions are propagated from Gaia DR3 J2016.0 to J2000.0 using per-star proper motions, so they are accurate J2000 ICRS coordinates. TheSkyX handles precession from J2000 to the current date internally.
+- **Names**: HIP numbers where available (Hipparcos cross-match plus SIMBAD fallback for high-proper-motion stars missed by the automated match), Gaia source_id otherwise
 
 ## Files
 
 | File | Description |
 |------|-------------|
 | `make_bright_star_catalog.py` | Script to regenerate the catalog from Gaia DR3 |
-| `bright_star_catalog.txt` | Catalog in TheSkyX fixed-width text format (sexagesimal RA/Dec, J2000.0) |
+| `bright_star_catalog.txt` | Catalog in TheSkyX fixed-width text format (sexagesimal RA/Dec, **J2000.0 epoch**) |
 | `bright_star_catalog.SDBX` | Pre-built TheSkyX user catalog database |
 | `bright_star_catalog.png` | Mollweide all-sky plot of catalog stars |
 | `AtFocus2.dbq` | Updated database query file used by @Focus2 to select focus stars |
@@ -73,10 +73,10 @@ MAG_UPPER      = 6.5           # output upper limit
 MAG_LOWER      = 3.5           # output lower limit
 FIELD_DEG      = 3.0           # field-isolation radius (degrees) — covers any FOV up to 6° across
 BOX_ARCMIN     = 5.0           # focus-box isolation radius (arcmin)
-CATALOG_EPOCH  = Time("J2030.0")  # positions propagated to this epoch for filtering and output
+CATALOG_EPOCH  = Time("J2000.0")  # output epoch — keep at J2000.0 (TheSkyX requires this)
 ```
 
-`CATALOG_EPOCH` controls both the proximity filtering and the output coordinates. TheSkyX handles precession from this epoch to the current date internally, but does not correct for proper motion — so the epoch should be updated periodically (e.g. change to `J2040.0` in the 2030s).
+`CATALOG_EPOCH` should remain `J2000.0`. TheSkyX interprets any non-J2000 epoch as an FK5 equinox and applies a precession correction, which produces incorrect positions if the catalog coordinates are ICRS (as Gaia provides). J2000.0 is the correct epoch to use; TheSkyX handles precession to the current date internally.
 
 After adjusting these and running the script, a new `bright_star_catalog.txt` will be produced. Import it into TheSkyX to generate a new `.SDBX` database file, then copy that into the `SDBs` folder as described above.
 
@@ -84,10 +84,10 @@ After adjusting these and running the script, a new `bright_star_catalog.txt` wi
 
 The script applies filters in a specific order to ensure sources outside the final magnitude range still act as contaminants during proximity checks:
 
-1. Download all Gaia sources with G < 9.5 (no type or variability filtering at this stage)
+1. Download all Gaia sources with G < 9.5 using dynamically-sized magnitude bands: `COUNT(*)` pre-flight queries (single row, no cap) measure each 0.5-mag coarse band, then any band over 40,000 sources is evenly subdivided; no type or variability filtering at this stage
 2. Propagate all positions from Gaia J2016.0 to `CATALOG_EPOCH` using per-star proper motions
 3. Remove any source with a brighter source within 3° (field isolation)
 4. Remove any surviving candidate with any other source within 5 arcmin (focus-box isolation, checked against the full G < 9.5 download)
 5. Keep only stellar, non-variable sources with 3.5 ≤ G ≤ 6.5
-6. Fetch Hipparcos cross-matches for the final stars (separate small query)
-7. Write output using the `CATALOG_EPOCH` positions — TheSkyX applies precession internally
+6. Fetch Hipparcos cross-matches via the Gaia `hipparcos2_best_neighbour` table, then fall back to SIMBAD TAP for any stars the automated match missed (typically high-proper-motion stars that moved >6 arcsec between the Hipparcos J1991.25 and Gaia J2016 epochs); stars with no HIP match in either source are named by Gaia `source_id`
+7. Write output using J2000.0 ICRS positions — TheSkyX applies precession from J2000 to the current date internally

@@ -14,8 +14,9 @@ Downloads Gaia DR3 sources with G < 9.5 and produces a fixed-width text catalog
 in TheSkyX user catalog format (sexagesimal RA/Dec, CATALOG_EPOCH).
 
 Filter logic (order matters):
-  1. Download ALL Gaia sources with G < 9.5 (no type or variability filter —
-     all sources act as contaminants in the proximity checks)
+  1. Download ALL Gaia sources with G < 9.5 using dynamically-sized magnitude bands
+     (COUNT(*) pre-flight queries size each band so none hits the 50,000-row
+     anonymous cap; no type or variability filter — all sources act as contaminants)
   2. Propagate all positions from Gaia J2016.0 to CATALOG_EPOCH using proper motions
   3. Remove any source that has a brighter source within 3° (field isolation)
   4. Remove any surviving candidate that has ANY other source from the full
@@ -54,25 +55,106 @@ FIELD_DEG    = 3.0    # field-isolation radius (degrees) — covers FSQ-85/Zeus 
 BOX_ARCMIN   = 5.0    # focus-box isolation radius (arcmin)
 
 T_GAIA         = Time("J2016.0")   # Gaia DR3 reference epoch
-CATALOG_EPOCH  = Time("J2030.0")   # target epoch for filtering and output
+CATALOG_EPOCH  = Time("J2000.0")   # output epoch; TheSkyX handles precession from J2000 internally
+
+
+def _count_band(lo, hi) -> int:
+    """COUNT(*) for a magnitude band — returns 1 row, immune to the anonymous cap."""
+    if lo is None:
+        where = f"phot_g_mean_mag < {hi}"
+    else:
+        where = f"phot_g_mean_mag >= {lo} AND phot_g_mean_mag < {hi}"
+    job = Gaia.launch_job(
+        f"SELECT COUNT(*) AS n FROM gaiadr3.gaia_source WHERE {where}",
+        verbose=False,
+    )
+    return int(job.get_results()[0]["n"])
+
+
+def _plan_bands(mag_limit: float, coarse_step: float = 0.5, target: int = 40_000) -> list:
+    """
+    Return (lo, hi) bands each containing at most `target` rows.
+
+    Runs cheap COUNT(*) pre-flight queries (1 row each, no row-limit cap) on
+    coarse `coarse_step`-mag candidate bands, then evenly subdivides any band
+    that exceeds `target`.  Empty bands are dropped automatically.
+    """
+    import math
+
+    # Build coarse candidate breakpoints in coarse_step increments from 0 to mag_limit.
+    # Stars brighter than G~3 are vanishingly rare so early COUNT queries return fast.
+    v, breaks = coarse_step, []
+    while round(v, 6) < mag_limit:
+        breaks.append(round(v, 6))
+        v = round(v + coarse_step, 6)
+
+    final_bands = []
+    for lo, hi in zip([None] + breaks, breaks + [mag_limit]):
+        label = f"G < {hi}" if lo is None else f"{lo} <= G < {hi}"
+        print(f"  Pre-flight count {label} ...", end=" ", flush=True)
+        n = _count_band(lo, hi)
+        print(f"{n:,}")
+        if n == 0:
+            continue
+        if n <= target:
+            final_bands.append((lo, hi))
+        else:
+            n_sub = math.ceil(n / target)
+            base = 0.0 if lo is None else lo
+            width = (hi - base) / n_sub
+            for k in range(n_sub):
+                sub_lo = round(base + k * width, 6)
+                sub_hi = hi if k == n_sub - 1 else round(base + (k + 1) * width, 6)
+                # Preserve lo=None for the first sub-band of the first coarse band
+                final_bands.append((sub_lo if (k > 0 or lo is not None) else None, sub_hi))
+
+    return final_bands
 
 
 def query_gaia(mag_limit: float) -> "astropy.table.Table":
-    """Download all sources for proximity filtering (no HIP join)."""
-    print(f"Querying Gaia DR3 for all sources with G < {mag_limit} ...")
-    query = f"""
-        SELECT source_id, ra, dec, pmra, pmdec,
-               phot_g_mean_mag,
-               classprob_dsc_combmod_star,
-               phot_variable_flag
-        FROM gaiadr3.gaia_source
-        WHERE phot_g_mean_mag < {mag_limit}
-        ORDER BY phot_g_mean_mag
+    """Download all sources for proximity filtering.
+
+    Uses COUNT(*) pre-flight queries to size each magnitude band so that none
+    exceeds the 50,000-row anonymous cap.  Bands that exceed the target are
+    evenly subdivided based on the actual count, not a fixed heuristic.
     """
-    job = Gaia.launch_job_async(query, verbose=False)
-    t = job.get_results()
-    print(f"  Retrieved {len(t):,} sources.")
-    return t
+    from astropy.table import vstack
+
+    print(f"Planning magnitude bands for G < {mag_limit} ...")
+    bands = _plan_bands(mag_limit)
+    print(f"  → {len(bands)} query bands planned.\n")
+
+    tables = []
+    total = 0
+    for lo, hi in bands:
+        if lo is None:
+            where = f"phot_g_mean_mag < {hi}"
+            label = f"G < {hi}"
+        else:
+            where = f"phot_g_mean_mag >= {lo} AND phot_g_mean_mag < {hi}"
+            label = f"{lo} <= G < {hi}"
+        print(f"  Querying band {label} ...")
+        query = f"""
+            SELECT source_id, ra, dec, pmra, pmdec,
+                   phot_g_mean_mag,
+                   classprob_dsc_combmod_star,
+                   phot_variable_flag
+            FROM gaiadr3.gaia_source
+            WHERE {where}
+            ORDER BY phot_g_mean_mag
+        """
+        job = Gaia.launch_job_async(query, verbose=False)
+        t = job.get_results()
+        n = len(t)
+        print(f"    Retrieved {n:,} sources.")
+        if n >= 50000:
+            print(f"    WARNING: still at 50,000 rows — plan_bands may need a smaller target.")
+        tables.append(t)
+        total += n
+
+    combined = vstack(tables)
+    print(f"\nTotal: {total:,} sources with G < {mag_limit}.")
+    return combined
 
 
 def query_hip_ids(source_ids: np.ndarray) -> dict:
@@ -87,6 +169,59 @@ def query_hip_ids(source_ids: np.ndarray) -> dict:
     job = Gaia.launch_job(query, verbose=False)
     t = job.get_results()
     return {int(row["source_id"]): int(row["hip_id"]) for row in t}
+
+
+def query_simbad_hip(source_ids: np.ndarray) -> dict:
+    """Fallback: fetch HIP IDs from SIMBAD for source_ids the Gaia cross-match missed.
+
+    Gaia's hipparcos2_best_neighbour table misses bright high-proper-motion stars
+    because the automated match uses a tight positional tolerance and the star may
+    have moved several arcseconds between the Hipparcos (J1991.25) and Gaia (J2016)
+    epochs.  SIMBAD carries the cross-references manually and is more complete.
+    """
+    if len(source_ids) == 0:
+        return {}
+
+    print(f"SIMBAD fallback: looking up {len(source_ids):,} unmatched source_ids ...")
+    id_list = ", ".join(f"'Gaia DR3 {sid}'" for sid in source_ids)
+    adql = f"""
+        SELECT i2.id AS gaia_id, i.id AS hip_id
+        FROM ident i
+        JOIN basic b ON i.oidref = b.oid
+        JOIN ident i2 ON i2.oidref = b.oid
+        WHERE i2.id IN ({id_list})
+        AND i.id LIKE 'HIP %'
+    """
+    url = "https://simbad.u-strasbg.fr/simbad/sim-tap/sync"
+    try:
+        resp = requests.post(
+            url,
+            data={"REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "text", "QUERY": adql},
+            timeout=120,
+        )
+        resp.raise_for_status()
+    except Exception as exc:
+        print(f"  SIMBAD query failed ({exc}); skipping fallback.")
+        return {}
+
+    result = {}
+    for line in resp.text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("-") or "|" not in line:
+            continue
+        parts = [p.strip().strip('"') for p in line.split("|")]
+        if len(parts) < 2 or parts[0].lower() == "gaia_id":
+            continue
+        gaia_str, hip_str = parts[0], parts[1]
+        if not gaia_str.startswith("Gaia DR3 ") or not hip_str.startswith("HIP "):
+            continue
+        try:
+            result[int(gaia_str[9:])] = int(hip_str[4:])
+        except ValueError:
+            continue
+
+    print(f"  Found {len(result):,} additional HIP IDs from SIMBAD.")
+    return result
 
 
 def propagate(ra_deg, dec_deg, pmra_masyr, pmdec_masyr,
@@ -291,8 +426,11 @@ def main():
     print(f"After final filter (stellar, non-variable, "
           f"{MAG_LOWER} <= G <= {MAG_UPPER}): {len(candidates):,} stars remain.")
 
-    # Step 6 — fetch HIP IDs for the final stars only (small targeted query)
+    # Step 6 — fetch HIP IDs: Gaia cross-match first, SIMBAD fallback for the rest
     hip_map = query_hip_ids(np.array(candidates["source_id"]))
+    unmatched = np.array([s for s in candidates["source_id"] if int(s) not in hip_map])
+    if len(unmatched):
+        hip_map.update(query_simbad_hip(unmatched))
 
     # Step 7 — output uses the already-propagated CATALOG_EPOCH positions
     write_catalog(candidates, cand_ra, cand_dec, hip_map, OUTPUT_FILE)
