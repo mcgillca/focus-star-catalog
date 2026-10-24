@@ -1,3 +1,4 @@
+#!/usr/bin/env -S uv run
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
@@ -18,10 +19,12 @@ Filter logic (order matters):
      (COUNT(*) pre-flight queries size each band so none hits the 50,000-row
      anonymous cap; no type or variability filter — all sources act as contaminants)
   2. Propagate all positions from Gaia J2016.0 to CATALOG_EPOCH using proper motions
-  3. Remove any source that has a brighter source within 3° (field isolation)
-  4. Remove any surviving candidate that has ANY other source from the full
+  3. Restrict candidates to stellar, non-variable sources with 3.5 <= G <= 6.5
+     (~800 stars) — proximity checks run over this small set only
+  4. Remove any candidate that has a brighter source within 3° (field isolation,
+     checked against the full G < 9.5 download)
+  5. Remove any surviving candidate that has ANY other source from the full
      G < 9.5 catalog within 5 arcmin (focus-box isolation)
-  5. Final filter: stellar, non-variable, 3.5 <= G <= 6.5
   6. Output positions are at CATALOG_EPOCH; TheSkyX handles precession internally
 """
 
@@ -396,35 +399,39 @@ def main():
     all_mags = np.array(all_sources["phot_g_mean_mag"], dtype=float)
     all_ids  = np.array(all_sources["source_id"])
 
-    # Step 3 — field isolation using propagated positions
-    keep = remove_dominated(all_ra, all_dec, all_mags,
-                            all_ra, all_dec, all_mags, FIELD_DEG)
-    cand_ra, cand_dec = all_ra[keep], all_dec[keep]
-    cand_mags = all_mags[keep]
-    cand_ids  = all_ids[keep]
-    candidates = all_sources[keep]
-
-    # Step 4 — focus-box isolation (checked against full propagated download)
-    keep = remove_crowded(cand_ra, cand_dec, cand_ids,
-                          all_ra,  all_dec,  all_ids, BOX_ARCMIN)
-    cand_ra, cand_dec = cand_ra[keep], cand_dec[keep]
-    candidates = candidates[keep]
-
-    # Step 5 — final filter: stellar, non-variable, within magnitude range
-    mags     = np.array(candidates["phot_g_mean_mag"], dtype=float)
-    probs    = np.array(candidates["classprob_dsc_combmod_star"], dtype=float)
-    var_flag = np.array(candidates["phot_variable_flag"], dtype=str)
+    # Step 3 — restrict candidates to stellar, non-variable sources in the output
+    #           magnitude range; proximity checks run over this small set only
+    mags     = np.array(all_sources["phot_g_mean_mag"], dtype=float)
+    probs    = np.array(all_sources["classprob_dsc_combmod_star"], dtype=float)
+    var_flag = np.array(all_sources["phot_variable_flag"], dtype=str)
 
     is_star  = (probs > 0.5) | np.isnan(probs)
     not_var  = var_flag != "VARIABLE"
     in_range = (mags >= MAG_LOWER) & (mags <= MAG_UPPER)
     mask     = is_star & not_var & in_range
 
-    candidates = candidates[mask]
-    cand_ra    = cand_ra[mask]
-    cand_dec   = cand_dec[mask]
-    print(f"After final filter (stellar, non-variable, "
-          f"{MAG_LOWER} <= G <= {MAG_UPPER}): {len(candidates):,} stars remain.")
+    candidates = all_sources[mask]
+    cand_ra    = all_ra[mask]
+    cand_dec   = all_dec[mask]
+    cand_mags  = all_mags[mask]
+    cand_ids   = all_ids[mask]
+    print(f"Initial candidates (stellar, non-variable, "
+          f"{MAG_LOWER} <= G <= {MAG_UPPER}): {len(candidates):,} stars.")
+
+    # Step 4 — field isolation: check candidates against the full download
+    keep = remove_dominated(cand_ra, cand_dec, cand_mags,
+                            all_ra,  all_dec,  all_mags, FIELD_DEG)
+    cand_ra, cand_dec = cand_ra[keep], cand_dec[keep]
+    cand_mags = cand_mags[keep]
+    cand_ids  = cand_ids[keep]
+    candidates = candidates[keep]
+
+    # Step 5 — focus-box isolation: check candidates against the full download
+    keep = remove_crowded(cand_ra, cand_dec, cand_ids,
+                          all_ra,  all_dec,  all_ids, BOX_ARCMIN)
+    cand_ra, cand_dec = cand_ra[keep], cand_dec[keep]
+    candidates = candidates[keep]
+    print(f"After isolation filters: {len(candidates):,} stars remain.")
 
     # Step 6 — fetch HIP IDs: Gaia cross-match first, SIMBAD fallback for the rest
     hip_map = query_hip_ids(np.array(candidates["source_id"]))

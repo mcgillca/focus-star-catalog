@@ -86,8 +86,8 @@ The script applies filters in a specific order to ensure sources outside the fin
 
 1. Download all Gaia sources with G < 9.5 using dynamically-sized magnitude bands: `COUNT(*)` pre-flight queries (single row, no cap) measure each 0.5-mag coarse band, then any band over 40,000 sources is evenly subdivided; no type or variability filtering at this stage
 2. Propagate all positions from Gaia J2016.0 to `CATALOG_EPOCH` using per-star proper motions
-3. Remove any source with a brighter source within 3° (field isolation)
-4. Remove any surviving candidate with any other source within 5 arcmin (focus-box isolation, checked against the full G < 9.5 download)
-5. Keep only stellar, non-variable sources with 3.5 ≤ G ≤ 6.5
+3. Restrict candidates to stellar, non-variable sources with 3.5 ≤ G ≤ 6.5 (~800 stars); the full G < 9.5 download is retained as the contaminant pool for proximity checks
+4. Remove any candidate with a brighter source within 3° (field isolation, checked against the full G < 9.5 download)
+5. Remove any surviving candidate with any other source within 5 arcmin (focus-box isolation, checked against the full G < 9.5 download)
 6. Fetch Hipparcos cross-matches via the Gaia `hipparcos2_best_neighbour` table, then fall back to SIMBAD TAP for any stars the automated match missed (typically high-proper-motion stars that moved >6 arcsec between the Hipparcos J1991.25 and Gaia J2016 epochs); stars with no HIP match in either source are named by Gaia `source_id`
 7. Write output using J2000.0 ICRS positions — TheSkyX applies precession from J2000 to the current date internally
